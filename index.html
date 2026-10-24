@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HCM Lite - Face Attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#1F3BFF; --deep:#0B1B8F; --paper:#FFFFFF; --mist:#EEF1FF; --ink:#0E1330; --muted:#5B6390;
+  --sun:#FFD23F; --ok:#12B76A; --bad:#F04438;
+  --display:'Syne','Segoe UI',system-ui,sans-serif;
+  --body:'Manrope','Segoe UI',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--blue);color:var(--ink);font-family:var(--body);min-height:100vh;
+  background-image:radial-gradient(circle at 12% 0%,#3A55FF 0,transparent 45%)}
+.app{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(340px,1fr);gap:26px;max-width:1320px;margin:0 auto;padding:26px}
+@media(max-width:920px){.app{grid-template-columns:1fr;padding:14px;gap:16px}}
+
+/* camera */
+.stage{position:relative;border:6px solid var(--paper);border-radius:36px;overflow:hidden;background:#000;align-self:start;
+  box-shadow:0 24px 0 -8px var(--deep)}
+.stage video{display:block;width:100%;transform:scaleX(-1)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.sweep{position:absolute;left:0;right:0;height:3px;background:var(--sun);box-shadow:0 0 22px 6px rgba(255,210,63,.55);top:0;opacity:0}
+.scanning .sweep{opacity:.85;animation:sweep 3.2s ease-in-out infinite alternate}
+@keyframes sweep{to{top:calc(100% - 3px)}}
+.brand{position:absolute;left:18px;top:16px;background:var(--paper);color:var(--ink);font-family:var(--display);font-weight:800;
+  padding:8px 16px;border-radius:999px;font-size:16px}
+.pill{position:absolute;left:18px;bottom:18px;max-width:calc(100% - 36px);background:var(--ink);color:#fff;
+  padding:11px 18px;border-radius:999px;font-weight:700;font-size:15px;display:flex;gap:10px;align-items:center}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;background:#8a90b8}
+.dot.live{background:var(--sun)}
+
+/* panel */
+.panel{background:var(--paper);border-radius:36px;padding:24px;display:flex;flex-direction:column;gap:18px;box-shadow:0 24px 0 -8px var(--deep)}
+.time{font-family:var(--display);font-weight:800;font-size:clamp(50px,6vw,76px);line-height:1;letter-spacing:-.03em}
+.date{color:var(--muted);margin-top:6px;font-weight:500}
+
+/* badge */
+.badge{position:relative;border-radius:26px;background:var(--mist);padding:34px 20px 20px;display:grid;grid-template-columns:96px 1fr;gap:18px;align-items:center;
+  border:2px dashed #C3CAFF;overflow:hidden;transition:background .2s,border-color .2s}
+.badge::before{content:"";position:absolute;top:12px;left:50%;width:54px;height:10px;margin-left:-27px;border-radius:6px;background:#C3CAFF}
+.badge canvas{width:96px;height:96px;border-radius:22px;background:#D9DEFF;display:block}
+.badge .nm{font-family:var(--display);font-weight:800;font-size:25px;line-height:1.1;overflow-wrap:anywhere}
+.badge .sub{color:var(--muted);margin-top:5px;font-weight:500}
+.badge .tag{display:inline-block;margin-top:10px;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:#D9DEFF;color:var(--deep)}
+.badge[data-s=ok]{background:#E8FBF2;border:2px solid var(--ok)}
+.badge[data-s=ok] .tag{background:var(--ok);color:#fff}
+.badge[data-s=bad]{background:#FFF0EE;border:2px solid var(--bad)}
+.badge[data-s=bad] .tag{background:var(--bad);color:#fff}
+.badge.pop{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{from{transform:scale(.94)}to{transform:scale(1)}}
+
+/* actions */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{font:inherit;cursor:pointer;border:0;border-radius:20px;padding:19px 12px;font-weight:800;font-size:18px;font-family:var(--display)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+.b-in{background:var(--sun);color:var(--ink)}
+.b-out{background:var(--ink);color:#fff}
+button:disabled{opacity:.5;cursor:wait}
+.msg{min-height:54px;border-radius:16px;padding:14px 16px;background:var(--mist);color:var(--muted);font-weight:500}
+.msg.ok{background:#E8FBF2;color:#067647}
+.msg.err{background:#FFF0EE;color:#B42318}
+
+/* tabs + list */
+.tabs{display:inline-flex;background:var(--mist);border-radius:999px;padding:4px;gap:2px;align-self:flex-start}
+.tab{padding:9px 18px;border-radius:999px;background:transparent;color:var(--muted);font-size:14px;font-family:var(--body);font-weight:700}
+.tab[aria-selected=true]{background:var(--blue);color:#fff}
+.list{list-style:none;padding:0;max-height:280px;overflow:auto}
+.head,.row{display:grid;grid-template-columns:42px 1fr 58px 58px;gap:10px;align-items:center}
+.head{padding:0 4px 8px;font-size:13px;font-weight:700;color:var(--muted)}
+.row{padding:10px 4px;border-top:1px solid var(--mist)}
+.av{width:42px;height:42px;border-radius:14px;background:var(--mist);color:var(--blue);display:grid;place-items:center;font-family:var(--display);font-weight:800}
+.row b{display:block;font-weight:700}
+.row small{color:var(--muted)}
+.t{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
+.t.na{color:#B6BBD6}
+.empty{color:var(--muted);padding:14px 4px}
+
+form{display:flex;flex-direction:column;gap:12px}
+label{font-size:14px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+input{font:inherit;font-weight:500;color:var(--ink);background:var(--mist);border:2px solid transparent;border-radius:14px;padding:14px}
+input:focus{border-color:var(--blue);outline:0}
+.b-reg{background:var(--blue);color:#fff}
+.hint{font-size:14px;color:var(--muted);line-height:1.5}
+[hidden]{display:none!important}
+@media(prefers-reduced-motion:reduce){.scanning .sweep{animation:none;top:50%}.badge.pop{animation:none}}
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="stage" id="stage" aria-label="Camera">
+    <video id="cam" autoplay playsinline muted></video>
+    <canvas id="ov"></canvas>
+    <div class="sweep"></div>
+    <div class="brand">HCM Lite</div>
+    <div class="pill"><span class="dot" id="dot"></span><span id="status">Starting camera…</span></div>
+  </section>
+
+  <section class="panel">
+    <div>
+      <div class="time" id="time">--:--</div>
+      <div class="date" id="date"></div>
+    </div>
+
+    <div class="badge" id="badge" data-s="idle">
+      <canvas id="photo" width="160" height="160"></canvas>
+      <div>
+        <div class="nm" id="bName">Nobody in view</div>
+        <div class="sub" id="bSub">Step in front of the camera</div>
+        <span class="tag" id="bTag">Waiting</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="b-in" id="bIn">Check in</button>
+      <button class="b-out" id="bOut">Check out</button>
+    </div>
+    <div class="msg" id="msg" role="status">Look at the camera, then choose Check in or Check out.</div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tToday" aria-selected="true">Today</button>
+      <button class="tab" role="tab" id="tReg" aria-selected="false">Register face</button>
+    </div>
+
+    <div id="pToday">
+      <div class="head"><span></span><span>Employee</span><span>In</span><span>Out</span></div>
+      <ul class="list" id="list"></ul>
+    </div>
+
+    <form id="pReg" hidden>
+      <label>Employee ID<input id="eid" autocomplete="off" placeholder="EMP001" required></label>
+      <label>Full name<input id="ename" autocomplete="off" required></label>
+      <button class="b-reg" id="bReg" type="submit">Save face</button>
+      <p class="hint">One person in the frame, facing the camera. Save 2-3 times at slightly different angles for better matching.</p>
+    </form>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const video = $('#cam'), ov = $('#ov'), ctx = ov.getContext('2d');
+const grab = document.createElement('canvas');
+const photo = $('#photo'), pc = photo.getContext('2d');
+
+function frame(){
+  grab.width = video.videoWidth; grab.height = video.videoHeight;
+  grab.getContext('2d').drawImage(video, 0, 0);
+  return grab.toDataURL('image/jpeg', 0.85);
+}
+async function api(path, method = 'GET', body){
+  const r = await fetch(path, {method, headers:{'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Request failed');
+  return d;
+}
+function say(text, kind = ''){ const m = $('#msg'); m.textContent = text; m.className = 'msg ' + kind; }
+
+/* clock */
+function tick(){
+  const n = new Date();
+  $('#time').textContent = n.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  $('#date').textContent = n.toLocaleDateString([], {weekday:'long', day:'numeric', month:'long'});
+}
+tick(); setInterval(tick, 1000);
+
+/* camera */
+async function startCam(){
+  try{
+    video.srcObject = await navigator.mediaDevices.getUserMedia({video:{width:1280, height:720, facingMode:'user'}, audio:false});
+    await video.play();
+    $('#dot').classList.add('live'); $('#stage').classList.add('scanning');
+    $('#status').textContent = 'Scanning…';
+    loop();
+  }catch(e){
+    $('#status').textContent = 'Camera blocked';
+    say('Allow camera access (use http://localhost:8000 or https).', 'err');
+  }
+}
+
+/* overlay */
+function brackets(x, y, w, h, color){
+  const L = Math.min(w, h) * 0.24;
+  ctx.strokeStyle = color; ctx.lineWidth = Math.max(4, ov.width / 280); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y + L); ctx.lineTo(x, y); ctx.lineTo(x + L, y);
+  ctx.moveTo(x + w - L, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + L);
+  ctx.moveTo(x + w, y + h - L); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - L, y + h);
+  ctx.moveTo(x + L, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - L);
+  ctx.stroke();
+}
+function draw(faces){
+  const W = video.videoWidth, H = video.videoHeight;
+  ov.width = W; ov.height = H; ctx.clearRect(0, 0, W, H);
+  const fs = Math.max(16, W / 50);
+  ctx.font = `700 ${fs}px Manrope, system-ui, sans-serif`;
+  faces.forEach(f => {
+    const [x1, y1, x2, y2] = f.box, known = !!f.employee_id;
+    const color = known ? '#35E08F' : '#FF6B57';
+    const x = W - x2, w = x2 - x1, y = y1, h = y2 - y1;
+    brackets(x, y, w, h, color);
+    const label = (known ? f.name : 'Unknown') + '  ' + Math.round(f.score * 100) + '%';
+    const tw = ctx.measureText(label).width + fs * 1.2, th = fs * 1.9;
+    const ly = y - th - 10 > 0 ? y - th - 10 : y + h + 10;
+    ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, ly, tw, th, th / 2); ctx.fill();
+    ctx.fillStyle = '#0E1330'; ctx.textBaseline = 'middle'; ctx.fillText(label, x + fs * 0.6, ly + th / 2 + 1);
+  });
+  const names = faces.filter(f => f.employee_id).map(f => f.name);
+  $('#status').textContent = !faces.length ? 'No face in view'
+    : names.length ? 'Recognised: ' + names.join(', ')
+    : (faces.length > 1 ? faces.length + ' faces' : '1 face') + ' - not recognised';
+}
+
+/* badge */
+let lastKey = '';
+function setBadge(faces){
+  const b = $('#badge');
+  if(!faces.length){
+    b.dataset.s = 'idle'; pc.clearRect(0, 0, 160, 160);
+    $('#bName').textContent = 'Nobody in view'; $('#bSub').textContent = 'Step in front of the camera'; $('#bTag').textContent = 'Waiting';
+    lastKey = ''; return;
+  }
+  const f = faces.slice().sort((a, c) => (!!c.employee_id - !!a.employee_id) || (c.score - a.score))[0];
+  const known = !!f.employee_id;
+  b.dataset.s = known ? 'ok' : 'bad';
+  $('#bName').textContent = known ? f.name : 'Unknown person';
+  $('#bSub').textContent = known ? 'ID ' + f.employee_id : 'Not registered yet';
+  $('#bTag').textContent = (known ? 'Matched ' : 'Best match ') + Math.round(f.score * 100) + '%';
+  const [x1, y1, x2, y2] = f.box, s = Math.max(x2 - x1, y2 - y1) * 1.3, cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  pc.save(); pc.clearRect(0, 0, 160, 160); pc.translate(160, 0); pc.scale(-1, 1);
+  pc.drawImage(grab, cx - s / 2, cy - s / 2, s, s, 0, 0, 160, 160); pc.restore();
+  const key = known ? f.employee_id : 'x';
+  if(key !== lastKey){ b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); lastKey = key; }
+}
+
+let busy = false;
+async function loop(){
+  if(!busy && video.videoWidth){
+    busy = true;
+    try{ const d = await api('/recognize', 'POST', {image: frame()}); draw(d.faces); setBadge(d.faces); }
+    catch(e){ $('#status').textContent = 'Server error: ' + e.message; }
+    busy = false;
+  }
+  setTimeout(loop, 700);
+}
+
+/* check in / out */
+async function mark(action){
+  const btns = [$('#bIn'), $('#bOut')]; btns.forEach(b => b.disabled = true);
+  try{ const d = await api('/attendance', 'POST', {image: frame(), action}); say(d.message, 'ok'); loadToday(); }
+  catch(e){ say(e.message, 'err'); }
+  btns.forEach(b => b.disabled = false);
+}
+$('#bIn').onclick = () => mark('check_in');
+$('#bOut').onclick = () => mark('check_out');
+
+/* today */
+async function loadToday(){
+  const rows = await api('/attendance/today').catch(() => []);
+  $('#tToday').textContent = 'Today (' + rows.length + ')';
+  const ul = $('#list'); ul.innerHTML = '';
+  if(!rows.length){ ul.innerHTML = '<li class="empty">Nobody has checked in yet today.</li>'; return; }
+  rows.forEach(r => {
+    const li = document.createElement('li'); li.className = 'row';
+    const av = document.createElement('div'); av.className = 'av'; av.textContent = (r.name || '?').trim().charAt(0).toUpperCase();
+    const nm = document.createElement('div'); const b = document.createElement('b'); b.textContent = r.name;
+    const sm = document.createElement('small'); sm.textContent = r.employee_id; nm.append(b, sm);
+    const ti = document.createElement('div'); ti.className = 't'; ti.textContent = r.check_in.slice(0, 5);
+    const to = document.createElement('div'); to.className = 't' + (r.check_out ? '' : ' na'); to.textContent = r.check_out ? r.check_out.slice(0, 5) : '--:--';
+    li.append(av, nm, ti, to); ul.appendChild(li);
+  });
+}
+loadToday(); setInterval(loadToday, 30000);
+
+/* tabs + register */
+function tab(reg){
+  $('#pToday').hidden = reg; $('#pReg').hidden = !reg;
+  $('#tToday').setAttribute('aria-selected', !reg); $('#tReg').setAttribute('aria-selected', reg);
+}
+$('#tToday').onclick = () => tab(false);
+$('#tReg').onclick = () => tab(true);
+$('#pReg').onsubmit = async e => {
+  e.preventDefault();
+  const b = $('#bReg'); b.disabled = true;
+  try{ const d = await api('/register', 'POST', {image: frame(), employee_id: $('#eid').value.trim(), name: $('#ename').value.trim()}); say(d.message, 'ok'); }
+  catch(err){ say(err.message, 'err'); }
+  b.disabled = false;
+};
+
+startCam();
+</script>
+</body>
+</html>
